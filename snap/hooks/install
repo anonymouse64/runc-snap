@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+
+# make a symlink from where runrootless expects to find runrootless-proot
+# into the snap folder
+if [ ! -d "$SNAP_USER_DATA/.runrootless" ]; then
+    mkdir -p "$SNAP_USER_DATA/.runrootless"
+    ln -s $SNAP/bin/proot "$SNAP_USER_DATA/.runrootless/runrootless-proot"
+fi

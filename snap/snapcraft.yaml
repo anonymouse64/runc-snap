@@ -1,0 +1,84 @@
+name: runc
+version: v1.0.0-rc5
+summary: CLI tool for spawning and running OCI containers
+description: |
+  runc is a CLI tool for spawning and running containers according to the OCI specification.
+
+
+confinement: strict
+grade: stable
+
+apps:
+  runc:
+    command: bin/wrapper.sh runc
+  runrootless:
+    command: bin/wrapper.sh runrootless
+  proot:
+    command: bin/wrapper.sh proot
+
+parts:
+  go:
+    source-tag: go1.10.2
+    source-depth: 1
+  dump-files:
+    plugin: dump
+    source: .
+    prime:
+      - bin/wrapper.sh
+  runrootless:
+    after: [go]
+    plugin: go
+    go-importpath: github.com/rootless-containers/runrootless
+    source: https://www.github.com/anonymouse64/runrootless.git
+    source-branch: bugfix/inside-namespaced-process
+  proot:
+    after: [go]
+    source: https://github.com/rootless-containers/PRoot.git
+    source-commit: 081bb63955eb4378e53cf4d0eb0ed0d3222bf66e
+    build-packages:
+      - build-essential
+      - git
+      - libseccomp-dev
+      - libtalloc-dev
+      - libprotobuf-c-dev
+      - libattr1-dev
+    plugin: make
+    source-subdir: src/
+    organize:
+      proot: bin/proot
+  runc:
+    plugin: make
+    source: https://github.com/opencontainers/runc.git
+    source-tag: v1.0.0-rc5
+    source-depth: 1
+    override-build: |
+      # first set the GOPATH to be in the current directory and in ".gopath"
+      export GOPATH="$(pwd)/.gopath"
+      # setup path to include both $SNAPCRAFT_STAGE/bin and $GOPATH/bin
+      # the former is for the go tools, as well as things like glide, etc.
+      # while the later is for govendor, etc. and other go tools that might need to be installed
+      export PATH="$SNAPCRAFT_STAGE/bin:$GOPATH/bin:$PATH"
+      # set GOROOT to be whatever the go tool from SNAPCRAFT_STAGE/bin is
+      export GOROOT=$(go env GOROOT)
+      # now setup the GOPATH for this part using the import path
+      export GOIMPORTPATH="$GOPATH/src/github.com/opencontainers/runc"
+      mkdir -p $GOIMPORTPATH
+      # note that some tools such as govendor don't work well with symbolic links, so while it's unfortunate
+      # we have to copy all this it's a necessary evil at the moment...
+      # but note that we do ignore all files that start with "." with the "./*" pattern
+      cp -r ./* $GOIMPORTPATH
+
+      # finally go into the go import path to prepare for building
+      cd $GOIMPORTPATH
+
+      go get -u github.com/LK4D4/vndr
+      go version
+      vndr
+      make
+      install -DT runc $SNAPCRAFT_PART_INSTALL/bin/runc
+
+    after:
+      - go
+    build-packages:
+      - libapparmor-dev
+      - libseccomp-dev
